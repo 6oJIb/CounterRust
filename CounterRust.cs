@@ -304,7 +304,7 @@ internal class UserInterface
         explosionIcon.color = CUI.Color.ProcentRGB(1, 1, 1, 0.75f);
         explosionIcon.png = png;
         explosionIcon.Draw();
-        Oxide.Core.Interface.Oxide.LogInfo($"[onevsfive] ASDSDSD");
+        //Oxide.Core.Interface.Oxide.LogInfo($"[onevsfive] ASDSDSD");
     }
 
 
@@ -887,33 +887,19 @@ internal class Round
     public bool IsMember(ulong userID) =>
         members.Find(m => m.userID == userID) is MatchMember;
 
-    public List<BasePlayer> GetOnlinePlayers()
-    {
-        List<BasePlayer> players = new List<BasePlayer>();
-        foreach (MatchMember m in members)
-            if (m.IsOnline())
-                players.Add(m.GetPlayer());
-        return players;
-    }
+    public List<BasePlayer> GetOnlinePlayers() =>
+        members.Where(m => m.IsOnline()).Select(m => m.GetPlayer()).ToList();
 
-    public List<MatchMember> GetOnlineMembers()
-    {
-        List<MatchMember> players = new List<MatchMember>();
-        foreach (MatchMember m in members)
-            if (m.IsOnline())
-                players.Add(m);
-        return players;
-    }
+    public List<MatchMember> GetOnlineMembers() =>
+        members.FindAll(m => m.IsOnline());
 
-    public HashSet<BasePlayer> GetTeamPlayers(Team team)
-    {
-        HashSet<BasePlayer> players = new HashSet<BasePlayer>();
-        foreach (MatchMember member in members)
-            if (member.team == team)
-                if (member.IsOnline())
-                    players.Add(member.GetPlayer());
-        return players;
-    }
+    public HashSet<BasePlayer> GetTeamPlayers(Team team) =>
+        Oxide.Plugins.ExtensionMethods.ToHashSet(
+            GetOnlineMembers()
+                .Where(m => m.team == team)
+                .Select(m => m.GetPlayer())
+        );
+
     public int CountAliveInTeam(Team team) =>
         members.FindAll(m => m.team == team && !m.droppedOut).Count;
 
@@ -1970,7 +1956,6 @@ namespace Oxide.Plugins
 
             round.bomb = bomb;
             round.isBombPlanted = true;
-            PrintToChat("Plant");
             round.timerOnce = timer.Once(lifetime, DetonateBomb);
 
             List<double> counter = new List<double>(LinearCounter(lifetime));
@@ -2016,8 +2001,9 @@ namespace Oxide.Plugins
                     player.Hurt(80, Rust.DamageType.Explosion, bomb, false);
                 }
             }
-            foreach (MatchMember member in round.GetOnlineMembers())
-                member.userInterface.CreateExplosionIcon();
+
+            round.GetOnlineMembers().ForEach(m => m.userInterface.CreateExplosionIcon());
+
             Effect.server.Run(explosionPrefabName, round.bomb.transform.position);
             if (round.bomb != null)
             {
@@ -2044,7 +2030,7 @@ namespace Oxide.Plugins
             => CanBombInteract(player) && IsBombInHands(player);
 
         private bool CanDefuse(BasePlayer player)
-            => CanBombInteract(player) && round.isBombPlanted && IsPlayerNearBomb(player) && round.GetMember(player.userID).IsDead();
+            => CanBombInteract(player) && round.isBombPlanted && IsPlayerNearBomb(player) && !round.GetMember(player.userID).IsDead();
         private bool IsBombInHands(BasePlayer player)
         {
             Item item = player.GetActiveItem();
@@ -2158,8 +2144,9 @@ namespace Oxide.Plugins
             round.timerEvery.DestroyToPool();
             PlantBomb(round.bombPlanter, pluginConfig.BombLifetime);
             PlayerUtility.RemoveActiveItem(round.bombPlanter);
-            if (round.TryGetMatchMember(round.bombPlanter.userID, out MatchMember member))
-                member.userInterface.CrateBombIcon();
+
+            round.GetOnlineMembers().ForEach(m => m.userInterface.CrateBombIcon());  
+
             string GetPlantName()
             {
                 if (IsPlayerInPlantA(round.bombPlanter)) return "A";
@@ -2175,8 +2162,7 @@ namespace Oxide.Plugins
         {
             DestroyTmr();
             DefuseBomb();
-            if (round.TryGetMatchMember(round.bombDefuser.userID, out MatchMember member))
-                member.userInterface.MakeBombIconGreen();
+            round.GetOnlineMembers().ForEach(m => m.userInterface.MakeBombIconGreen());
             CallRoundEnd(ReasonRoundEnd.BombDefused);
             round.bombDefuser = null;
         }
@@ -2184,13 +2170,9 @@ namespace Oxide.Plugins
         #endregion
 
         #region Death
+
         private void ForceRespawn(BasePlayer player)
         {
-            //NextTick(() =>
-            //{
-            //    //UI?.DestroySpectatorCUI(player);
-                
-            //});
             if (player.IsDead())
             {
                 player.Respawn();
@@ -2206,29 +2188,28 @@ namespace Oxide.Plugins
             ulong userID = player.userID;
             bool connected = PlayerUtility.IsOnline(player);
 
-            NextTick(() => {
-                if (connected)
+            if (connected)
+            {
+                if (!match.isGoing)
                 {
-                    if (!match.isGoing)
-                    {
-                        ForceRespawn(player);
-                        return;
-                    }
-
-                    if (!round.IsMember(userID))
-                    {
-                        ForceRespawn(player);
-                        return;
-                    }
-
-                    if (round.GetMember(userID).droppedOut) //!!!
-                    {
-                        ForceRespawn(player);
-                        return;
-                    }
+                    NextTick(() => { ForceRespawn(player); });
+                    return;
                 }
-            });
+
+                if (!round.IsMember(userID))
+                {
+                    NextTick(() => { ForceRespawn(player); });
+                    return;
+                }
+
+                if (round.GetMember(userID).droppedOut) //!!!
+                {
+                    NextTick(() => { ForceRespawn(player); });
+                    return;
+                }
+            }
             MatchMember matchMember = round.GetMember(userID);
+            matchMember.droppedOut = true;
 
             bool isRaider = matchMember.IsRaider();
             bool isDefender = matchMember.IsDefender();
@@ -2243,7 +2224,6 @@ namespace Oxide.Plugins
             matchMember.userInterface.DestroySpectatorUI();
 
             RemovePlayerFromTeam(player);
-            matchMember.droppedOut = true;
 
             BaseEntity entInitiator = info.Initiator;
             BasePlayer killer = entInitiator?.ToPlayer();
