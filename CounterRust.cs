@@ -2221,7 +2221,7 @@ namespace Oxide.Plugins
                         return;
                     }
 
-                    if (round.GetMember(userID).IsDead()) //!!!
+                    if (round.GetMember(userID).droppedOut) //!!!
                     {
                         ForceRespawn(player);
                         return;
@@ -2283,7 +2283,7 @@ namespace Oxide.Plugins
                     timer.Once(pluginConfig.DeathDuration, () =>
                     {
                         HashSet<BasePlayer> raiders = round.GetTeamPlayers(Team.Raiders);
-                        foreach (BasePlayer spectator in player.GetSpectators().ToList())
+                        foreach (BasePlayer spectator in player.GetSpectators())
                             TrySpectate(spectator, raiders, ListDirection.Next, player);
 
                         if (connected)
@@ -2312,7 +2312,7 @@ namespace Oxide.Plugins
                 {
                     timer.Once(pluginConfig.DeathDuration, () => {
                         HashSet<BasePlayer> defenders = round.GetTeamPlayers(Team.Defenders);
-                        foreach (BasePlayer spectator in player.GetSpectators().ToList())
+                        foreach (BasePlayer spectator in player.GetSpectators())
                             TrySpectate(spectator, defenders, ListDirection.Next, player);
 
                         if (connected)
