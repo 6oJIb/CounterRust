@@ -1,4 +1,5 @@
-﻿using Newtonsoft.Json;
+﻿using Benchmark;
+using Newtonsoft.Json;
 using Oxide.Core.Plugins;
 using Oxide.Ext.SimpleCUI;
 using Oxide.Ext.SimpleCUI.Assets;
@@ -1094,7 +1095,8 @@ namespace Oxide.Plugins
         Match match;
 
         const string bombShortPrefabName = "explosive.timed";
-        const string explosionPrefabName = "assets/prefabs/tools/c4/effects/c4_explosion.prefab";
+        const string explosionPrefabName = "assets/content/effects/explosions/explosion large.prefab";
+        //const string explosionPrefabName = "assets/prefabs/tools/c4/effects/c4_explosion.prefab";
         //string bombPrefab = "assets/prefabs/tools/c4/explosive.timed.entity.prefab";    
         //string beepSound = "assets/prefabs/locks/keypad/effects/lock.code.unlock.prefab";
         const string deploySound = "assets/prefabs/tools/c4/effects/c4_stick.prefab";
@@ -1145,8 +1147,11 @@ namespace Oxide.Plugins
             [JsonProperty(PropertyName = "Round end delay")]
             public int RoundEndDelay = 5;
 
+            [JsonProperty(PropertyName = "Bomb max damage")]
+            public float BombMaxDamage = 300;
+
             [JsonProperty(PropertyName = "Bomb explosion raduis")]
-            public int BombExplosionRadius = 20;
+            public float BombExplosionRadius = 40;
 
             [JsonProperty(PropertyName = "Bomb plant time")]
             public int BombPlantTime = 5;
@@ -1393,6 +1398,17 @@ namespace Oxide.Plugins
             // 0.5 сек после тп
             round.timerOnce = timer.Once(0.5f, () =>
             {
+                foreach (BaseNetworkable ent in BaseEntity.serverEntities.ToList())
+                {
+                    if (ent is Door)
+                    {
+                        Door door = (Door)ent;
+                        if (door.IsOpen())
+                            door.SetOpen(false);
+                        door.UpdateNetworkGroup();
+                        door.SendNetworkUpdateImmediate();
+                    }
+                }
                 Timer freezeTimer = timer.Every(1f / 100f, () =>
                 {
                     foreach (MatchMember member in round.GetOnlineMembers())
@@ -1443,15 +1459,6 @@ namespace Oxide.Plugins
             });
         }
 
-        private void EndRound()
-        {
-            Puts($"Round {match.roundCount} end. Forced");
-            KillAll(round.GetOnlinePlayers());
-            if (round.bomb != null)
-                round.bomb.AdminKill();
-            ClearRound();
-        }
-
         private void EndMatch()
         {
             if (round.timerOnce != null)
@@ -1460,9 +1467,10 @@ namespace Oxide.Plugins
                     round.timerOnce.DestroyToPool();
                     round.timerEvery.DestroyToPool();
                 }
-
+            Puts($"Round {match.roundCount} end. Forced");
             Puts("End match");
-            EndRound();
+            KillAll(round.GetOnlinePlayers());
+            ClearRound();
             round = new Round();
             match = new Match(pluginConfig.SwapRound, pluginConfig.MaxRound);
         }
@@ -1555,7 +1563,7 @@ namespace Oxide.Plugins
             round.timerOnce?.DestroyToPool();
             round.timerEvery?.DestroyToPool();
             round.GetOnlineMembers().ForEach(m => m.userInterface.DestroyInterface());
-            CleanupArea();
+            ClearArea();
             ClearAllTeams();
             //foreach (BasePlayer player in BasePlayer.activePlayerList.ToList())
             //{
@@ -1624,7 +1632,7 @@ namespace Oxide.Plugins
             }
         }
 
-        private void CleanupArea()
+        private void ClearArea()
         {
             int items = 0; int corpses = 0;
             foreach (BaseNetworkable ent in BaseEntity.serverEntities.ToList())
@@ -1632,11 +1640,16 @@ namespace Oxide.Plugins
                 if (ent is Door)
                 {
                     Door door = (Door)ent;
-                    door.SetOpen(false);
-                    door.SendNetworkUpdate();
+                    if (door.IsOpen())
+                        door.SetOpen(false);
+                    door.UpdateNetworkGroup();
+                    door.SendNetworkUpdateImmediate();
                 }
-
-                if (ent is LootableCorpse || ent is PlayerCorpse)
+                else if (ent is BuildingBlock)
+                {
+                    ent.KillAsMapEntity();
+                }
+                else if (ent is LootableCorpse || ent is PlayerCorpse)
                 {
                     LootableCorpse corpse = ent as LootableCorpse;
                     List<ItemContainer> inventory = new List<ItemContainer>();
@@ -1649,14 +1662,12 @@ namespace Oxide.Plugins
                     corpses++;
                     ent.KillAsMapEntity();
                 }
-
-                if (ent is DroppedItem)
+                else if (ent is DroppedItem)
                 {
                     items++;
                     ent.KillAsMapEntity();
                 }
-
-                if (ent is RFTimedExplosive)
+                else if (ent is RFTimedExplosive)
                 {
                     items++;
                     ent.KillAsMapEntity();
@@ -1930,17 +1941,29 @@ namespace Oxide.Plugins
             BaseEntity entity = GameManager.server.CreateEntity(prefab, Vector3.zero);
             if (entity == null)
             {
-                player.ChatMessage("Ошибка спавна C4.");
+                Puts("Failed to create bomb");
                 return;
             }
-            entity.Spawn();
 
             RFTimedExplosive bomb = entity as RFTimedExplosive;
             if (bomb == null)
             {
-                player.ChatMessage("Ошибка: объект не является C4.");
+                Puts("Entity is not bomb");
                 return;
             }
+
+            BaseEntity foundation = GameManager.server.CreateEntity(
+                "assets/prefabs/building core/foundation/foundation.prefab",
+                hit.point - new Vector3(0, 4, 0)
+            );
+            if (entity == null)
+            {
+                Puts("Failed to crate foundation");
+                return;
+            }
+            foundation.Spawn();
+            bomb.Spawn();
+
             bomb.CancelInvoke(bomb.Explode);
             bomb.SetFlagLocal(BaseEntity.Flags.Reserved2, false);
             bomb.ServerPosition = hit.point;
@@ -1948,7 +1971,7 @@ namespace Oxide.Plugins
             rot.x = 0f;
             Quaternion yawOnly = Quaternion.Euler(0f, rot.y, 0f);
             bomb.transform.localRotation = yawOnly * Quaternion.Euler(-90, 0, 0) * Quaternion.Euler(0, 0, -180);
-            bomb.DoStick(bomb.ServerPosition, hit.normal, bomb.GetEntity(), hit.collider);
+            bomb.DoStick(bomb.ServerPosition, hit.normal, foundation, hit.collider);
             bomb.SendNetworkUpdate();
 
             Puts("Bomb planted");
@@ -1987,19 +2010,27 @@ namespace Oxide.Plugins
 
         private void DetonateBomb()
         {
+            float f1(float x)
+            {
+                float dmg = (-1f * (pluginConfig.BombMaxDamage / pluginConfig.BombExplosionRadius) * x
+                             + pluginConfig.BombMaxDamage);
+
+                return Mathf.Max(dmg, 0f);
+            }
+
             round.isBombExploded = true;
-            Vector3 bombPosition = round.bomb.ServerPosition;
             Puts("Bomb has been detonated");
             foreach (BasePlayer player in BasePlayer.activePlayerList.ToList())
             {
-                if (player == null || player.IsDead() || player.IsSpectating()) continue;
+                if (player == null || player.IsDead() || player.IsSpectating())
+                    continue;
 
-                Vector3 playerPosition = player.ServerPosition;
-                if (Vector3.Distance(playerPosition, bombPosition) <= pluginConfig.BombExplosionRadius)
-                {
-                    BaseEntity bomb = round.bomb;
-                    player.Hurt(80, Rust.DamageType.Explosion, bomb, false);
-                }
+                RFTimedExplosive bomb = round.bomb; 
+                float distance = Vector3.Distance(player.transform.position, bomb.transform.position);
+                if (distance <= pluginConfig.BombExplosionRadius)
+                    player.Hurt(f1(distance), Rust.DamageType.Explosion, bomb, false);
+
+                //Puts("{0} {1} {2}", bomb.transform.position, distance, f1(distance));
             }
 
             round.GetOnlineMembers().ForEach(m => m.userInterface.CreateExplosionIcon());
@@ -2262,6 +2293,8 @@ namespace Oxide.Plugins
                 {
                     timer.Once(pluginConfig.DeathDuration, () =>
                     {
+                        if (!round.IsTeamAlive(Team.Raiders))
+                            return;
                         HashSet<BasePlayer> raiders = round.GetTeamPlayers(Team.Raiders);
                         foreach (BasePlayer spectator in player.GetSpectators())
                             TrySpectate(spectator, raiders, ListDirection.Next, player);
@@ -2291,6 +2324,8 @@ namespace Oxide.Plugins
                 else
                 {
                     timer.Once(pluginConfig.DeathDuration, () => {
+                        if (!round.IsTeamAlive(Team.Defenders))
+                            return;
                         HashSet<BasePlayer> defenders = round.GetTeamPlayers(Team.Defenders);
                         foreach (BasePlayer spectator in player.GetSpectators())
                             TrySpectate(spectator, defenders, ListDirection.Next, player);
@@ -2423,7 +2458,7 @@ namespace Oxide.Plugins
         private void ClearMapCommand(BasePlayer player, string command, string[] args)
         {
             if (player.IPlayer.IsAdmin)
-                CleanupArea();
+                ClearArea();
         }
 
         [ChatCommand("cr")]
