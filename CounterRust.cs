@@ -1,5 +1,4 @@
-﻿using Benchmark;
-using Newtonsoft.Json;
+﻿using Newtonsoft.Json;
 using Oxide.Core.Plugins;
 using Oxide.Ext.SimpleCUI;
 using Oxide.Ext.SimpleCUI.Assets;
@@ -36,25 +35,137 @@ internal class UserInterface
     public Plugin ImageLibrary;
     public CUI.Canvas progressBarCanvas = new CUI.Canvas();
     public CUI.ImageLabel bombIcon = new CUI.ImageLabel();
-    public bool isDestroyed = false;
     public Timer progerssBarTimerOnce;
     public Timer progerssBarTimerEvery;
-    public const string bombIconName = "BombIcon";
-    public const string roundScoreFrameName = "RoundScoreTab";
     public const string raiderScoreText = "RaidersScore";
     public const string defendersScoreText = "DefendersScore";
-    //public const string countdownFrameName = "CountdownFrame";
     public const string avatarShadowName = "AvatarShadow";
-    public const string countdownTextName = "CountdownText";
     public const string killsTextName = "Kills";
     public const string deathTextName = "Deaths";
-    public const string spectatorInfoFrame = "SpectatorInfo";
 
     public UserInterface(Plugin ImageLibrary, BasePlayer owner)
     {
         this.ImageLibrary = ImageLibrary;
         this.owner = owner;
     }
+
+    public void CreateInterface(List<MatchMember> filtredMembers, int maxTeamSize)
+    {
+        List<BasePlayer> raiders = new List<BasePlayer>();
+        List<BasePlayer> defenders = new List<BasePlayer>();
+        foreach (MatchMember matchMember in filtredMembers)
+        {
+            if (matchMember.team == Team.Raiders)
+                raiders.Add(matchMember.GetPlayer());
+            else
+                defenders.Add(matchMember.GetPlayer());
+        }
+
+        CUI.Canvas roundTabCanvas = new CUI.Canvas();
+        roundTabCanvas.anchorPoint = new Vector2(0.5f, 1);
+        roundTabCanvas.position = new Vector2(0, 945);
+        roundTabCanvas.size = new Vector2(1920, 135);
+        roundTabCanvas.parent = CUILayers.Under;
+        roundTabCanvas.owner = owner;
+        this.roundTabCanvas = roundTabCanvas;
+
+        CUI.Frame roundTabFrame = new CUI.Frame();
+        roundTabFrame.size = CUI.Transform.FromScale(1, 1);
+        roundTabFrame.AddComponent(new CuiHorizontalLayoutGroupComponent
+        {
+            ChildAlignment = TextAnchor.LowerCenter,
+            Padding = "0",  // or "10 10 10 10"
+            Spacing = 4,
+            ChildControlHeight = false,
+            ChildControlWidth = false,
+            ChildForceExpandHeight = false,
+            ChildForceExpandWidth = false,
+            ChildScaleHeight = false,
+            ChildScaleWidth = false
+        });
+        roundTabFrame.color = CUI.Color.ProcentRGB(0, 0, 0, 0);
+        roundTabFrame.parent = roundTabCanvas;
+
+        int i;
+        for (i = 0; i < maxTeamSize - raiders.Count; ++i)
+            CreateEmptyAvatar();
+        foreach (BasePlayer raider in raiders)
+            CreateAvatar(raider);
+
+
+        CUI.Frame backgroundFrame = new CUI.Frame();
+        backgroundFrame.parent = roundTabFrame;
+        backgroundFrame.size = CUI.Transform.FromOffset(110, 80);
+        backgroundFrame.color = CUI.Color.HEX("252525", 0.95f);
+        CUI.Frame countdownFrame = new CUI.Frame();
+        countdownFrame.parent = backgroundFrame;
+        countdownFrame.position = CUI.Transform.FromScale(0, 1);
+        countdownFrame.size = CUI.Transform.FromOffset(110, 36);
+        countdownFrame.anchor = CUI.Transform.FromScale(0, 1);
+        countdownFrame.color = CUI.Color.HEX("1B1A15", 0.95f);
+        this.countdownFrame = countdownFrame;
+        CUI.TextLabel countdownText = new CUI.TextLabel();
+        countdownText.parent = countdownFrame;
+        countdownText.size = CUI.Transform.FromScale(1f, 1f);
+        countdownText.fontSize = 20;
+        countdownText.text = ":)";
+        countdownText.align = TextAnchor.MiddleCenter;
+        this.countdownText = countdownText;
+
+
+        //ROUND RAIDERS
+        CUI.Frame roundRaidersFrame = new CUI.Frame();
+        roundRaidersFrame.parent = backgroundFrame;
+        roundRaidersFrame.size = CUI.Transform.FromOffset(53, 40);
+        roundRaidersFrame.color = CUI.Color.HEX("7A3A2D", 0.9f);
+        CUI.ImageLabel roundRaidersShadow = new CUI.ImageLabel();
+        roundRaidersShadow.parent = roundRaidersFrame;
+        roundRaidersShadow.size = CUI.Transform.FromScale(1, 1);
+        roundRaidersShadow.position = CUI.Transform.FromOffset(0, 1);
+        roundRaidersShadow.png = SimpleCUIExt.GetPreloadImage(ImageLibrary, "shadow");
+        roundRaidersShadow.color = CUI.Color.ProcentRGB(1, 1, 1, 0.75f);
+        CUI.TextLabel roundRaidersText = new CUI.TextLabel();
+        roundRaidersText.name = raiderScoreText;
+        roundRaidersText.parent = roundRaidersShadow;
+        roundRaidersText.size = roundRaidersShadow.size;
+        roundRaidersText.position = CUI.Transform.zero;
+        roundRaidersText.anchor = CUI.Transform.zero;
+        roundRaidersText.fontSize = 20;
+        roundRaidersText.align = TextAnchor.MiddleCenter;
+        roundRaidersText.text = "0";
+
+        //ROUND DEFRNDERS
+        CUI.Frame roundDefendersFrame = new CUI.Frame();
+        roundDefendersFrame.parent = backgroundFrame;
+        roundDefendersFrame.anchor = CUI.Transform.FromScale(1, 0);
+        roundDefendersFrame.size = CUI.Transform.FromOffset(53, 40);
+        roundDefendersFrame.position = CUI.Transform.FromScale(1, 0);
+        roundDefendersFrame.color = CUI.Color.HEX("244254", 0.9f);
+        CUI.ImageLabel roundDefendersShadow = new CUI.ImageLabel();
+        roundDefendersShadow.parent = roundDefendersFrame;
+        roundDefendersShadow.position = CUI.Transform.FromOffset(0, 1);
+        roundDefendersShadow.size = CUI.Transform.FromScale(1, 1);
+        roundDefendersShadow.png = SimpleCUIExt.GetPreloadImage(ImageLibrary, "shadow");
+        roundDefendersShadow.color = CUI.Color.ProcentRGB(1, 1, 1, 0.75f);
+        CUI.TextLabel roundDefendersText = new CUI.TextLabel();
+        roundDefendersText.name = defendersScoreText;
+        roundDefendersText.parent = roundDefendersShadow;
+        roundDefendersText.size = CUI.Transform.FromScale(1, 1);
+        roundDefendersText.position = CUI.Transform.zero;
+        roundDefendersText.anchor = CUI.Transform.zero;
+        roundDefendersText.anchor = CUI.Transform.zero;
+        roundDefendersText.fontSize = 20;
+        roundDefendersText.align = TextAnchor.MiddleCenter;
+        roundDefendersText.text = "0";
+
+        foreach (BasePlayer defender in defenders)
+            CreateAvatar(defender);
+        for (i = 0; i < maxTeamSize - defenders.Count; ++i)
+            CreateEmptyAvatar();
+
+        roundTabCanvas.Draw();
+    }
+
     public void CreateRoundResult(ReasonRoundEnd reason)
     {
         CUI.Color red = CUI.Color.HEX("D52528", 0.9f);
@@ -123,12 +234,6 @@ internal class UserInterface
         roundResultCanvas = canvas;
     }
 
-    public void DestroyRoundResult()
-    {
-        if (roundResultCanvas.isAlive)
-            roundResultCanvas.Destroy();
-    }
-
     public void CreateProgressBar(ref PluginTimers timer, float time)
     {
         CUI.Canvas canvas = new CUI.Canvas();
@@ -188,20 +293,6 @@ internal class UserInterface
         progerssBarTimerOnce = timer.Once(time, DestroyProgressBar);
     }
 
-    public void DestroyProgressBar()
-    {
-        Oxide.Core.Interface.Oxide.LogInfo("[onevsfive] Progress bar is destroyed");
-        if (progressBarCanvas != null)
-        {
-            progressBarCanvas.Destroy();
-            progressBarCanvas = null;
-        }
-        progerssBarTimerEvery?.Destroy();
-        progerssBarTimerEvery = null;
-        progerssBarTimerOnce?.Destroy();
-        progerssBarTimerOnce = null;
-    }
-
     private bool TryFindShadow(CUI.ImageLabel avatar, out CUI.ImageLabel avatarShadow)
     {
         foreach (CUI.Element child in avatar.children)
@@ -250,7 +341,6 @@ internal class UserInterface
             child.Destroy();
 
         CUI.ImageLabel bombIcon = new CUI.ImageLabel();
-        bombIcon.name = bombIconName;
         bombIcon.owner = countdownFrame.owner;
         bombIcon.parent = countdownFrame;
         bombIcon.size = CUI.Transform.FromScale(0.4f, 0.9f);
@@ -308,8 +398,6 @@ internal class UserInterface
         //Oxide.Core.Interface.Oxide.LogInfo($"[onevsfive] ASDSDSD");
     }
 
-
-
     //public void MakeAvatersAlive()
     //{
     //    foreach (Frame plrRoundTab in data)
@@ -331,12 +419,8 @@ internal class UserInterface
     //        }
     //    }
     //}
-    public void DestroySpectatorUI()
-    {
-        spectatorCanvas.Destroy();
-    }
 
-    public void CreateSpectatorCUI(BasePlayer target)
+    public void CreateSpectatorInterface(BasePlayer target)
     {
         CUI.Canvas canvas = new CUI.Canvas();
         canvas.anchorPoint = new Vector2(0.5f, 0);
@@ -606,134 +690,46 @@ internal class UserInterface
 
     public void DestroyInterface()
     {
-        isDestroyed = true;
-        spectatorCanvas?.Destroy();
-        spectatorCanvas = null;
+        DestroySpectatorInterface();
         roundTabCanvas.Destroy();
         roundTabCanvas = null;
         progressBarCanvas?.Destroy();
         progressBarCanvas = null;
-        roundResultCanvas?.Destroy();
-        roundResultCanvas = null;
+        DestroyRoundResult();
     }
 
-    public void CreateInterface(List<MatchMember> filtredMembers, int maxTeamSize)
+    public void DestroyRoundResult()
     {
-        List<BasePlayer> raiders = new List<BasePlayer>();
-        List<BasePlayer> defenders = new List<BasePlayer>();
-        foreach (MatchMember matchMember in filtredMembers)
+        if (roundResultCanvas != null)
         {
-            if (matchMember.team == Team.Raiders)
-                raiders.Add(matchMember.GetPlayer());
-            else
-                defenders.Add(matchMember.GetPlayer());
+            if (roundResultCanvas.isAlive)
+                roundResultCanvas.Destroy();
+            roundResultCanvas = null;
         }
+    }
 
-        CUI.Canvas roundTabCanvas = new CUI.Canvas();
-        roundTabCanvas.anchorPoint = new Vector2(0.5f, 1);
-        roundTabCanvas.position = new Vector2(0, 945);
-        roundTabCanvas.size = new Vector2(1920, 135);
-        roundTabCanvas.parent = CUILayers.Under;
-        roundTabCanvas.owner = owner;
-        this.roundTabCanvas = roundTabCanvas;
-
-        CUI.Frame roundTabFrame = new CUI.Frame();
-        roundTabFrame.size = CUI.Transform.FromScale(1, 1);
-        roundTabFrame.AddComponent(new CuiHorizontalLayoutGroupComponent
+    public void DestroyProgressBar()
+    {
+        Oxide.Core.Interface.Oxide.LogInfo("[onevsfive] Progress bar is destroyed");
+        if (progressBarCanvas != null)
         {
-            ChildAlignment = TextAnchor.LowerCenter,
-            Padding = "0",  // or "10 10 10 10"
-            Spacing = 4,
-            ChildControlHeight = false,
-            ChildControlWidth = false,
-            ChildForceExpandHeight = false,
-            ChildForceExpandWidth = false,
-            ChildScaleHeight = false,
-            ChildScaleWidth = false
-        });
-        roundTabFrame.color = CUI.Color.ProcentRGB(0, 0, 0, 0);
-        roundTabFrame.parent = roundTabCanvas;
+            progressBarCanvas.Destroy();
+            progressBarCanvas = null;
+        }
+        progerssBarTimerEvery?.Destroy();
+        progerssBarTimerEvery = null;
+        progerssBarTimerOnce?.Destroy();
+        progerssBarTimerOnce = null;
+    }
 
-        int i;
-        for (i = 0; i < maxTeamSize - raiders.Count; ++i)
-            CreateEmptyAvatar();
-        foreach (BasePlayer raider in raiders)
-            CreateAvatar(raider);
-
-
-        CUI.Frame backgroundFrame = new CUI.Frame();
-        backgroundFrame.name = roundScoreFrameName;
-        backgroundFrame.parent = roundTabFrame;
-        backgroundFrame.size = CUI.Transform.FromOffset(110, 80);
-        backgroundFrame.color = CUI.Color.HEX("252525", 0.95f);
-        CUI.Frame countdownFrame = new CUI.Frame();
-        countdownFrame.parent = backgroundFrame;
-        countdownFrame.position = CUI.Transform.FromScale(0, 1);
-        countdownFrame.size = CUI.Transform.FromOffset(110, 36);
-        countdownFrame.anchor = CUI.Transform.FromScale(0, 1);
-        countdownFrame.color = CUI.Color.HEX("1B1A15", 0.95f);
-        this.countdownFrame = countdownFrame;
-        CUI.TextLabel countdownText = new CUI.TextLabel();
-        countdownText.name = countdownTextName;
-        countdownText.parent = countdownFrame;
-        countdownText.size = CUI.Transform.FromScale(1f, 1f);
-        countdownText.fontSize = 20;
-        countdownText.text = ":)";
-        countdownText.align = TextAnchor.MiddleCenter;
-        this.countdownText = countdownText;
-
-
-        //ROUND RAIDERS
-        CUI.Frame roundRaidersFrame = new CUI.Frame();
-        roundRaidersFrame.parent = backgroundFrame;
-        roundRaidersFrame.size = CUI.Transform.FromOffset(53, 40);
-        roundRaidersFrame.color = CUI.Color.HEX("7A3A2D", 0.9f);
-        CUI.ImageLabel roundRaidersShadow = new CUI.ImageLabel();
-        roundRaidersShadow.parent = roundRaidersFrame;
-        roundRaidersShadow.size = CUI.Transform.FromScale(1, 1);
-        roundRaidersShadow.position = CUI.Transform.FromOffset(0, 1);
-        roundRaidersShadow.png = SimpleCUIExt.GetPreloadImage(ImageLibrary, "shadow");
-        roundRaidersShadow.color = CUI.Color.ProcentRGB(1, 1, 1, 0.75f);
-        CUI.TextLabel roundRaidersText = new CUI.TextLabel();
-        roundRaidersText.name = raiderScoreText;
-        roundRaidersText.parent = roundRaidersShadow;
-        roundRaidersText.size = roundRaidersShadow.size;
-        roundRaidersText.position = CUI.Transform.zero;
-        roundRaidersText.anchor = CUI.Transform.zero;
-        roundRaidersText.fontSize = 20;
-        roundRaidersText.align = TextAnchor.MiddleCenter;
-        roundRaidersText.text = "0";
-
-        //ROUND DEFRNDERS
-        CUI.Frame roundDefendersFrame = new CUI.Frame();
-        roundDefendersFrame.parent = backgroundFrame;
-        roundDefendersFrame.anchor = CUI.Transform.FromScale(1, 0);
-        roundDefendersFrame.size = CUI.Transform.FromOffset(53, 40);
-        roundDefendersFrame.position = CUI.Transform.FromScale(1, 0);
-        roundDefendersFrame.color = CUI.Color.HEX("244254", 0.9f);
-        CUI.ImageLabel roundDefendersShadow = new CUI.ImageLabel();
-        roundDefendersShadow.parent = roundDefendersFrame;
-        roundDefendersShadow.position = CUI.Transform.FromOffset(0, 1);
-        roundDefendersShadow.size = CUI.Transform.FromScale(1, 1);
-        roundDefendersShadow.png = SimpleCUIExt.GetPreloadImage(ImageLibrary, "shadow");
-        roundDefendersShadow.color = CUI.Color.ProcentRGB(1, 1, 1, 0.75f);
-        CUI.TextLabel roundDefendersText = new CUI.TextLabel();
-        roundDefendersText.name = defendersScoreText;
-        roundDefendersText.parent = roundDefendersShadow;
-        roundDefendersText.size = CUI.Transform.FromScale(1, 1);
-        roundDefendersText.position = CUI.Transform.zero;
-        roundDefendersText.anchor = CUI.Transform.zero;
-        roundDefendersText.anchor = CUI.Transform.zero;
-        roundDefendersText.fontSize = 20;
-        roundDefendersText.align = TextAnchor.MiddleCenter;
-        roundDefendersText.text = "0";
-
-        foreach (BasePlayer defender in defenders)
-            CreateAvatar(defender);
-        for (i = 0; i < maxTeamSize - defenders.Count; ++i)
-            CreateEmptyAvatar();
-
-        roundTabCanvas.Draw();
+    public void DestroySpectatorInterface()
+    {
+        if (spectatorCanvas != null)
+        {
+            if (spectatorCanvas.isAlive)
+                spectatorCanvas.Destroy();
+            spectatorCanvas = null;
+        }
     }
 }
 
@@ -752,14 +748,13 @@ internal class MatchMember
         this.userID = userID;
         this.team = team;
     }
-    public void ApplyDroppedOut()
-    {
-        droppedOut = true;
-    }
+
     public bool IsRaider() => team == Team.Raiders;
+
     public bool IsDefender() => team == Team.Defenders;
-    public bool IsDead() => droppedOut;
+
     public bool IsOnline() => PlayerUtility.IsOnline(GetPlayer());
+
     public BasePlayer GetPlayer() => BasePlayer.FindByID(userID);
 
     public void Heal()
@@ -911,7 +906,7 @@ internal class Round
 
     public BasePlayer GetRandomBombPlanter()
     {
-        List<BasePlayer> plrs = GetTeamPlayers(Team.Raiders).ToList();
+        List<BasePlayer> plrs = GetTeamPlayers(Team.Raiders);
         int index = UnityEngine.Random.Range(0, plrs.Count);
 
         if (plrs.Count == 0)
@@ -922,15 +917,6 @@ internal class Round
 
         return plrs[index]; ;
     }
-
-    //public void ClearFlags()
-    //{
-    //    isGoing = false;
-    //    isBombDefused = false;
-    //    isBombPlanted = false;
-    //    isBombExploded = false;
-    //    isTimeIsUp = false;
-    //}
 }
 
 internal struct Circle3
@@ -1102,7 +1088,6 @@ namespace Oxide.Plugins
         const string beepSound = "assets/prefabs/locks/keypad/effects/lock.code.unlock.prefab";
         #endregion
 
-
         #region Config
         internal PluginConfig pluginConfig;
         internal class PluginConfig
@@ -1206,35 +1191,9 @@ namespace Oxide.Plugins
 
         #region Match
 
+
         //-----------------------------MAIN-----------------------------
-        private List<double> LinearCounter(double totalTime)
-        {
-            List<double> list = new List<double>();
 
-            double start = 1.0;      // первый шаг
-            double minValue = 0.1;   // последний шаг
-
-            // вычисляем количество шагов
-            int N = (int)Math.Round(2 * totalTime / (start + minValue));
-
-            // вычисляем линейное уменьшение
-            double step = (start - minValue) / (N - 1);
-
-            double sum = 0;
-            double value = start;
-
-            for (int tick = 1; tick <= N; tick++)
-            {
-                double v = (tick == N) ? totalTime - sum : value;
-                sum += v;
-
-                list.Add(v);
-
-                value -= step;
-            }
-
-            return list;
-        }
 
         private void StartMatch()
         {
@@ -1399,7 +1358,7 @@ namespace Oxide.Plugins
             CreateNewTeam(raiders);
             CreateNewTeam(defenders);
 
-            // 0.5 сек после тп
+            // ЧУТЬ ДЕЛЕЯ ПОСЛЕ ТП
             round.timerOnce = timer.Once(0.5f, () =>
             {
                 foreach (BaseNetworkable ent in BaseEntity.serverEntities.ToList())
@@ -1552,7 +1511,9 @@ namespace Oxide.Plugins
                 matchMember.userInterface.SetTabScore(match.tabScore[Team.Raiders], match.tabScore[Team.Defenders]);
         }
 
+
         //-----------------------------HELPFUL-----------------------------
+
 
         private void OutGameInfo()
         {
@@ -1582,9 +1543,50 @@ namespace Oxide.Plugins
                 round.bomb.AdminKill();
         }
 
+        private void ClearArea()
+        {
+            int items = 0; int corpses = 0;
+            foreach (BaseNetworkable ent in BaseEntity.serverEntities.ToList())
+            {
+                if (ent is Door)
+                {
+                    Door door = (Door)ent;
+                    if (door.IsOpen())
+                        door.SetOpen(false);
+                    door.UpdateNetworkGroup();
+                    door.SendNetworkUpdateImmediate();
+                }
+                else if (ent is BuildingBlock)
+                {
+                    ent.KillAsMapEntity();
+                }
+                else if (ent is LootableCorpse || ent is PlayerCorpse)
+                {
+                    LootableCorpse corpse = ent as LootableCorpse;
+                    List<ItemContainer> inventory = new List<ItemContainer>();
+                    if (corpse != null)
+                        corpse.GetAllInventories(inventory);
 
-        //private bool isBombExist() =>
-        //    round.bomb != null;
+                    foreach (ItemContainer container in inventory)
+                        container.Clear();
+
+                    corpses++;
+                    ent.KillAsMapEntity();
+                }
+                else if (ent is DroppedItem)
+                {
+                    items++;
+                    ent.KillAsMapEntity();
+                }
+                else if (ent is RFTimedExplosive)
+                {
+                    items++;
+                    ent.KillAsMapEntity();
+                }
+            }
+
+            Puts($"Items removed: {items}. Corpses removed: {corpses}. All doors is closed");
+        }
 
         private bool IsPlayerNearBomb(BasePlayer player)
         {
@@ -1640,56 +1642,32 @@ namespace Oxide.Plugins
             }
         }
 
-        private void ClearArea()
+        private List<double> LinearCounter(double totalTime)
         {
-            int items = 0; int corpses = 0;
-            foreach (BaseNetworkable ent in BaseEntity.serverEntities.ToList())
+            List<double> list = new List<double>();
+
+            double start = 1.0;
+            double minValue = 0.1;
+
+            int N = (int)Math.Round(2 * totalTime / (start + minValue));
+
+            double step = (start - minValue) / (N - 1);
+
+            double sum = 0;
+            double value = start;
+
+            for (int tick = 1; tick <= N; tick++)
             {
-                if (ent is Door)
-                {
-                    Door door = (Door)ent;
-                    if (door.IsOpen())
-                        door.SetOpen(false);
-                    door.UpdateNetworkGroup();
-                    door.SendNetworkUpdateImmediate();
-                }
-                else if (ent is BuildingBlock)
-                {
-                    ent.KillAsMapEntity();
-                }
-                else if (ent is LootableCorpse || ent is PlayerCorpse)
-                {
-                    LootableCorpse corpse = ent as LootableCorpse;
-                    List<ItemContainer> inventory = new List<ItemContainer>();
-                    if (corpse != null)
-                        corpse.GetAllInventories(inventory);
+                double v = (tick == N) ? totalTime - sum : value;
+                sum += v;
 
-                    foreach (ItemContainer container in inventory)
-                        container.Clear();
+                list.Add(v);
 
-                    corpses++;
-                    ent.KillAsMapEntity();
-                }
-                else if (ent is DroppedItem)
-                {
-                    items++;
-                    ent.KillAsMapEntity();
-                }
-                else if (ent is RFTimedExplosive)
-                {
-                    items++;
-                    ent.KillAsMapEntity();
-                }
+                value -= step;
             }
 
-            Puts($"Items removed: {items}. Corpses removed: {corpses}. All doors is closed");
+            return list;
         }
-
-        //private void updatePlayerScore(BasePlayer player)
-        //{
-        //    match.
-        //    UI?.SetPlayerScore(player, score.Item1, score.Item2);
-        //}
 
         private object CanLootPlayer(BasePlayer target, BasePlayer initiator)
         {
@@ -1705,10 +1683,10 @@ namespace Oxide.Plugins
             if (item.info.shortname == "bandage") return null;
             if (item.info.shortname == "explosive.timed")
             {
-                if (round.GetMember(player.userID).IsRaider())
+                if (round.TryGetMatchMember(player.userID, out MatchMember matchMember))
                 {
-                    //round.bombPlanter = player;
-                    return null;
+                    if (matchMember.IsRaider())
+                        return null;
                 }
                 else return false;
             }
@@ -1717,10 +1695,10 @@ namespace Oxide.Plugins
         }
 
 
-
         #endregion Match
 
         #region Spectating     
+
 
         private bool CanBeSpectated(BasePlayer player)
             => player != null
@@ -1728,7 +1706,6 @@ namespace Oxide.Plugins
             && !player.IsDead()
             && !player.IsSleeping()
             && PlayerUtility.IsOnline(player);
-
 
         public enum ListDirection
         {
@@ -1767,7 +1744,7 @@ namespace Oxide.Plugins
                     continue;
                 if (!CanBeSpectated(player))
                     continue;
-                if (round.GetMember(player.userID).IsDead())
+                if (round.GetMember(player.userID).droppedOut)
                     continue;
 
                 target = player;
@@ -1786,8 +1763,8 @@ namespace Oxide.Plugins
                 if (round.TryGetMatchMember(player.userID, out MatchMember member))
                 {
                     if (member.userInterface.spectatorCanvas.isAlive)
-                        member.userInterface.DestroySpectatorUI();
-                    member.userInterface.CreateSpectatorCUI(target);
+                        member.userInterface.DestroySpectatorInterface();
+                    member.userInterface.CreateSpectatorInterface(target);
                 }
             }
             else
@@ -1795,22 +1772,28 @@ namespace Oxide.Plugins
                 if (round.TryGetMatchMember(player.userID, out MatchMember member))
                 {
                     if (member.userInterface.spectatorCanvas.isAlive)
-                        member.userInterface.DestroySpectatorUI();
+                        member.userInterface.DestroySpectatorInterface();
                 }
                 NextTick(() => { ForceRespawn(player); });
             }
         }
+
+
         #endregion Spectating
 
         #region Team
+
+
         private bool OnTeamLeave(RelationshipManager.PlayerTeam pT, BasePlayer bP) => false;
+
         private bool OnTeamCreate(BasePlayer p) => false;
+
         private void RemovePlayerFromTeam(BasePlayer player)
         {
             List<RelationshipManager.PlayerTeam> teams = RelationshipManager.ServerInstance.teams.Values.ToList();
             foreach (var team in teams)
             {
-                var membersCopy = team.members.ToList(); // копия списка
+                var membersCopy = team.members.ToList();
                 foreach (ulong plrId in membersCopy)
                 {
                     if (plrId == player.userID)
@@ -1818,25 +1801,26 @@ namespace Oxide.Plugins
                 }
             }
         }
+
         private void ClearAllTeams()
         {
             List<RelationshipManager.PlayerTeam> teams = RelationshipManager.ServerInstance.teams.Values.ToList();
-            // Удаляем все старые команды
             foreach (var team in teams)
             {
-                var membersCopy = team.members.ToList(); // копия списка
+                var membersCopy = team.members.ToList();
                 foreach (ulong plrId in membersCopy)
                     team.RemovePlayer(plrId);
                 team.Disband();
             }
         }
+
         private void CreateNewTeam(IEnumerable<BasePlayer> players)
         {
-            // Создаём новую команду
             RelationshipManager.PlayerTeam newTeam = RelationshipManager.ServerInstance.CreateTeam();
             foreach (BasePlayer plr in players)
                 newTeam.AddPlayer(plr);
         }
+
 
         #endregion Team
 
@@ -1850,59 +1834,10 @@ namespace Oxide.Plugins
             players.OrderBy(m => m.userID).ToList();
 
 
-        //private List<BasePlayer> SortPlayersInTeam(HashSet<BasePlayer> team)
-        //{
-        //    List<BasePlayer> sortedTeam = team.ToList();
-        //    int i; bool swapped; BasePlayer plr;
-        //    do
-        //    {
-        //        swapped = false;
-        //        for (i = 0; i < sortedTeam.Count - 1; ++i)
-        //        {
-        //            if (sortedTeam[i] == null || sortedTeam[i + 1] == null)
-        //            {
-        //                Puts("BasePlayer in SortPlayersInTeam() == null, value skipped");
-        //                continue;
-        //            }
-        //            if (sortedTeam[i].userID > sortedTeam[i + 1].userID)
-        //            {
-        //                plr = sortedTeam[i];
-        //                sortedTeam[i] = sortedTeam[i + 1];
-        //                sortedTeam[i + 1] = plr;
-        //                swapped = true;
-        //            }
-        //        }
-        //    } while (swapped);
-        //    return sortedTeam;
-        //}
-
-        //private List<BasePlayer> GetPlayersListByIDStrings(List<string> idStrings)
-        //{
-        //    List<BasePlayer> players = new List<BasePlayer>();
-        //    foreach (string id in idStrings)
-        //    {
-        //        BasePlayer player = BasePlayer.FindByID(ulong.Parse(id));
-        //        if (player != null)
-        //            players.Add(player);
-        //        else
-        //            Puts("Player Not Found during HUD Initialisation");
-        //    }
-
-        //    return players;
-        //}
-
         #endregion Helpers
 
         #region Bomb
 
-        bool IsPlayerInPlant(BasePlayer player)
-            => IsPlayerInPlantA(player) || IsPlayerInPlantB(player);
-
-        bool IsPlayerInPlantA(BasePlayer player)
-            => ZoneManager.Call<bool>("IsPlayerInZone", "zone_plantA", player);
-
-        bool IsPlayerInPlantB(BasePlayer player)
-            => ZoneManager.Call<bool>("IsPlayerInZone", "zone_plantB", player);
 
         void OnExplosiveThrown(BasePlayer player, BaseEntity entity, ThrownWeapon item)
         {
@@ -1913,14 +1848,14 @@ namespace Oxide.Plugins
             }
         }
 
-        //private void KillBomb()
-        //{
-        //    round.bomb?.Kill();
-        //    round.bombTimer?.Destroy();
-        //    round.bomb = null;
-        //    round.bombPlanter = null;
-        //    round.isBombPlanted = false;
-        //}
+        bool IsPlayerInPlant(BasePlayer player)
+            => IsPlayerInPlantA(player) || IsPlayerInPlantB(player);
+
+        bool IsPlayerInPlantA(BasePlayer player)
+            => ZoneManager.Call<bool>("IsPlayerInZone", "zone_plantA", player);
+
+        bool IsPlayerInPlantB(BasePlayer player)
+            => ZoneManager.Call<bool>("IsPlayerInZone", "zone_plantB", player);
 
         private void PlantBomb(BasePlayer player, int lifetime)
         {
@@ -2020,12 +1955,10 @@ namespace Oxide.Plugins
                 if (player == null || player.IsDead() || player.IsSpectating())
                     continue;
 
-                RFTimedExplosive bomb = round.bomb; 
+                RFTimedExplosive bomb = round.bomb;
                 float distance = Vector3.Distance(player.transform.position, bomb.transform.position);
                 if (distance <= pluginConfig.BombExplosionRadius)
                     player.Hurt(f1(distance), Rust.DamageType.Explosion, bomb, false);
-
-                //Puts("{0} {1} {2}", bomb.transform.position, distance, f1(distance));
             }
 
             round.GetOnlineMembers().ForEach(m => m.userInterface.CreateExplosionIcon());
@@ -2045,6 +1978,8 @@ namespace Oxide.Plugins
             round.bomb.SendNetworkUpdate();
             round.isBombDefused = true;
         }
+
+
         #endregion Bomb
 
         #region Plant and Defuse
@@ -2121,18 +2056,18 @@ namespace Oxide.Plugins
             }
             if (input.WasJustReleased(BUTTON.USE))
             {
-                
+
                 if (tmrEvery != null && round.bombPlanter != null && !round.isBombPlanted)
                 {
                     if (player.userID == round.bombPlanter.userID)
                         InteruptPlant();
-                }  
+                }
                 else if (tmrEvery != null && round.bombDefuser != null && round.isBombPlanted)
                 {
                     if (player.userID == round.bombDefuser.userID)
                         InteruptDefuse();
                 }
-                    
+
             }
 
             return null;
@@ -2190,7 +2125,7 @@ namespace Oxide.Plugins
             PlantBomb(round.bombPlanter, pluginConfig.BombLifetime);
             PlayerUtility.RemoveActiveItem(round.bombPlanter);
 
-            round.GetOnlineMembers().ForEach(m => m.userInterface.CrateBombIcon());  
+            round.GetOnlineMembers().ForEach(m => m.userInterface.CrateBombIcon());
 
             string GetPlantName()
             {
@@ -2216,6 +2151,7 @@ namespace Oxide.Plugins
 
         #region Death
 
+
         private void ForceRespawn(BasePlayer player)
         {
             if (player.IsDead())
@@ -2224,9 +2160,6 @@ namespace Oxide.Plugins
                 PlayerUtility.ClearInventory(player);
             }
         }
-
-
-
 
         private void OnPlayerDeath(BasePlayer player, HitInfo info)
         {
@@ -2266,7 +2199,7 @@ namespace Oxide.Plugins
                 member.userInterface.SetPlayerScore(matchMember);
                 member.userInterface.MakeAvatarDeath(player);
             }
-            matchMember.userInterface.DestroySpectatorUI();
+            matchMember.userInterface.DestroySpectatorInterface();
 
             RemovePlayerFromTeam(player);
 
@@ -2318,7 +2251,8 @@ namespace Oxide.Plugins
                 }
                 else
                 {
-                    timer.Once(pluginConfig.DeathDuration, () => {
+                    timer.Once(pluginConfig.DeathDuration, () =>
+                    {
                         if (!round.IsTeamAlive(Team.Defenders))
                             return;
                         List<BasePlayer> defenders = round.GetTeamPlayers(Team.Defenders);
@@ -2361,7 +2295,7 @@ namespace Oxide.Plugins
                         else if (round.isBombExploded)
                             member.userInterface.CreateExplosionIcon();
 
-                        if (member.IsDead())
+                        if (member.droppedOut)
                             TrySpectate(player, round.GetTeamPlayers(member.team), ListDirection.Next, null);
 
                         foreach (MatchMember m in onlineMembers)
@@ -2410,17 +2344,11 @@ namespace Oxide.Plugins
             syringe?.Drop(player.GetDropPosition(), player.GetInheritedDropVelocity() + vector.normalized * 3f);
         }
 
+
         #endregion Death
 
         #region Commands
-        //[ConsoleCommand("getActivePlayers")]
-        //private void GetActivePlayersCommand(ConsoleSystem.Arg arg)
-        //{
-        //    Puts("Active players: ");
-        //    foreach (BasePlayer p in BasePlayer.activePlayerList)
 
-        //        Puts("    " + p.ToString());
-        //}
 
         [ChatCommand("start")]
         private void StartMatchCommand(BasePlayer player, string command, string[] args)
@@ -2537,6 +2465,5 @@ namespace Oxide.Plugins
             PlayerUtility.GiveKit(rust, player, "knight");
         }
         #endregion Colosseum
-
     }
 }
