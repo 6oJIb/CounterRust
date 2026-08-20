@@ -69,7 +69,7 @@ internal class UserInterface
         canvas.position = new Vector2(1920f / 2f, 795);
         canvas.anchor = CUI.Transform.FromScale(0.5f, 0);
         canvas.owner = owner;
-        canvas.parent = CUILayers.Under;
+        canvas.parent = CUILayers.Overall;
 
         CUI.Frame frame = new CUI.Frame();
         frame.sprite = CUISprites.Tiletex;
@@ -196,9 +196,9 @@ internal class UserInterface
             progressBarCanvas.Destroy();
             progressBarCanvas = null;
         }
-        progerssBarTimerEvery?.DestroyToPool();
+        progerssBarTimerEvery?.Destroy();
         progerssBarTimerEvery = null;
-        progerssBarTimerOnce?.DestroyToPool();
+        progerssBarTimerOnce?.Destroy();
         progerssBarTimerOnce = null;
     }
 
@@ -889,17 +889,13 @@ internal class Round
         members.Find(m => m.userID == userID) is MatchMember;
 
     public List<BasePlayer> GetOnlinePlayers() =>
-        members.Where(m => m.IsOnline()).Select(m => m.GetPlayer()).ToList();
+        GetOnlineMembers().Select(m => m.GetPlayer()).ToList();
 
     public List<MatchMember> GetOnlineMembers() =>
         members.FindAll(m => m.IsOnline());
 
-    public HashSet<BasePlayer> GetTeamPlayers(Team team) =>
-        Oxide.Plugins.ExtensionMethods.ToHashSet(
-            GetOnlineMembers()
-                .Where(m => m.team == team)
-                .Select(m => m.GetPlayer())
-        );
+    public List<BasePlayer> GetTeamPlayers(Team team) =>
+       GetOnlineMembers().Where(m => m.team == team).Select(m => m.GetPlayer()).ToList();
 
     public int CountAliveInTeam(Team team) =>
         members.FindAll(m => m.team == team && !m.droppedOut).Count;
@@ -1281,11 +1277,19 @@ namespace Oxide.Plugins
             }
             else
             {
-                foreach (BasePlayer player in GetPlayersListByIDStrings(pluginConfig.Raiders))
-                    match.AddMember(player.userID, Team.Raiders);
+                foreach (string userID in pluginConfig.Raiders)
+                {
+                    BasePlayer player = BasePlayer.Find(userID);
+                    if (player != null)
+                        match.AddMember(player.userID, Team.Raiders);
+                }
 
-                foreach (BasePlayer player in GetPlayersListByIDStrings(pluginConfig.Defenders))
-                    match.AddMember(player.userID, Team.Defenders);
+                foreach (string userID in pluginConfig.Defenders)
+                {
+                    BasePlayer player = BasePlayer.Find(userID);
+                    if (player != null)
+                        match.AddMember(player.userID, Team.Defenders);
+                }
             }
 
             StartRound();
@@ -1350,8 +1354,8 @@ namespace Oxide.Plugins
                 EndMatch();
                 return;
             }
-            HashSet<BasePlayer> raiders = round.GetTeamPlayers(Team.Raiders);
-            HashSet<BasePlayer> defenders = round.GetTeamPlayers(Team.Defenders);
+            List<BasePlayer> raiders = round.GetTeamPlayers(Team.Raiders);
+            List<BasePlayer> defenders = round.GetTeamPlayers(Team.Defenders);
             round.ClearMembersFlags();
 
             Puts($"Round {match.roundCount} start");
@@ -1365,7 +1369,7 @@ namespace Oxide.Plugins
             foreach (MatchMember member in round.GetOnlineMembers())
             {
                 member.userInterface = new UserInterface(ImageLibrary, member.GetPlayer());
-                member.userInterface.CreateInterface(SortPlayersInTeam(round.GetOnlineMembers()), pluginConfig.MaxTeamSize);
+                member.userInterface.CreateInterface(SortMembers(round.GetOnlineMembers()), pluginConfig.MaxTeamSize);
                 member.userInterface.SetTabScore(match.tabScore[Team.Raiders], match.tabScore[Team.Defenders]);
                 foreach (MatchMember m in round.GetOnlineMembers())
                     member.userInterface.SetPlayerScore(m);
@@ -1418,7 +1422,7 @@ namespace Oxide.Plugins
                         member.Heal();
                     }
                 });
-                timer.Once(pluginConfig.RoundStartDelay, freezeTimer.DestroyToPool);
+                timer.Once(pluginConfig.RoundStartDelay, freezeTimer.Destroy);
                 // ПОДГОТОВКА
                 round.countdown = pluginConfig.RoundStartDelay;
                 foreach (MatchMember member in round.GetOnlineMembers())
@@ -1434,7 +1438,7 @@ namespace Oxide.Plugins
 
                 round.timerOnce = timer.Once(pluginConfig.RoundStartDelay, () =>
                 {
-                    round.timerEvery.DestroyToPool();
+                    round.timerEvery.Destroy();
                     // ОСНОВНОЕ ВРЕМЯ
                     round.countdown = pluginConfig.RoundDuration;
                     foreach (MatchMember member in round.GetOnlineMembers())
@@ -1450,7 +1454,7 @@ namespace Oxide.Plugins
                     });
                     round.timerOnce = timer.Once(pluginConfig.RoundDuration, () =>
                     {
-                        round.timerEvery.DestroyToPool();
+                        round.timerEvery.Destroy();
                         round.isTimeIsUp = true;
                         CallRoundEnd(ReasonRoundEnd.TimeIsUp);
                     });
@@ -1462,11 +1466,14 @@ namespace Oxide.Plugins
         private void EndMatch()
         {
             if (round.timerOnce != null)
+            {
                 if (!round.timerOnce.Destroyed)
                 {
-                    round.timerOnce.DestroyToPool();
-                    round.timerEvery.DestroyToPool();
+                    round.timerOnce.Destroy();
+                    round.timerEvery.Destroy();
                 }
+            }
+
             Puts($"Round {match.roundCount} end. Forced");
             Puts("End match");
             KillAll(round.GetOnlinePlayers());
@@ -1506,8 +1513,8 @@ namespace Oxide.Plugins
             foreach (MatchMember matchMember in round.GetOnlineMembers())
                 matchMember.userInterface.CreateRoundResult(reason);
 
-            round.timerEvery.DestroyToPool();
-            round.timerOnce.DestroyToPool();
+            round.timerEvery.Destroy();
+            round.timerOnce.Destroy();
             round.timerOnce = timer.Once(pluginConfig.RoundEndDelay, () =>
             {
                 KillAll(round.GetOnlinePlayers());
@@ -1560,8 +1567,8 @@ namespace Oxide.Plugins
 
         private void ClearRound()
         {
-            round.timerOnce?.DestroyToPool();
-            round.timerEvery?.DestroyToPool();
+            round.timerOnce?.Destroy();
+            round.timerEvery?.Destroy();
             round.GetOnlineMembers().ForEach(m => m.userInterface.DestroyInterface());
             ClearArea();
             ClearAllTeams();
@@ -1584,17 +1591,17 @@ namespace Oxide.Plugins
             if (round.bomb == null)
                 return false;
 
-            if (Vector3.Distance(player.ServerPosition, round.bomb.ServerPosition) <= 5f)
+            if (Vector3.Distance(player.transform.position, round.bomb.transform.position) <= 0.3f)
                 return true;
 
             return false;
         }
 
-        private void SpawnPlayers(HashSet<BasePlayer> players, Vector3 spawnpoint, string kitName)
+        private void SpawnPlayers(IEnumerable<BasePlayer> players, Vector3 spawnpoint, string kitName)
         {
+            Circle3 circle = new Circle3(spawnpoint, 7f);
             foreach (BasePlayer player in players)
             {
-                Circle3 circle = new Circle3(spawnpoint, 7f);
                 if (player != null)
                 {
                     if (player.IsDead())
@@ -1604,6 +1611,7 @@ namespace Oxide.Plugins
 
                     timer.Once(0.1f, () =>
                     {
+                        PlayerUtility.RemoveActiveItem(player);
                         PlayerUtility.ClearInventory(player);
                         PlayerUtility.GiveKit(rust, player, kitName);
                     });
@@ -1613,7 +1621,7 @@ namespace Oxide.Plugins
             }
         }
 
-        private void KillAll(List<BasePlayer> players)
+        private void KillAll(IEnumerable<BasePlayer> players)
         {
             foreach (BasePlayer player in players)
             {
@@ -1625,7 +1633,7 @@ namespace Oxide.Plugins
                     if (!player.IsDead())
                         player.DieInstantly();
 
-                    NextTick(() => player.Respawn());
+                    NextTick(() => ForceRespawn(player));
                 }
                 else
                     Puts($"Player in KillAll() is null");
@@ -1714,8 +1722,12 @@ namespace Oxide.Plugins
 
         #region Spectating     
 
-        private bool CanBeSpectated(BasePlayer player) =>
-            player != null && !player.IsSpectating() && !player.IsDead() && !player.IsSleeping() && PlayerUtility.IsOnline(player);
+        private bool CanBeSpectated(BasePlayer player)
+            => player != null
+            && !player.IsSpectating()
+            && !player.IsDead()
+            && !player.IsSleeping()
+            && PlayerUtility.IsOnline(player);
 
 
         public enum ListDirection
@@ -1724,10 +1736,10 @@ namespace Oxide.Plugins
             Previous = -1
         }
 
-        private bool TryFindSpectationTarget(HashSet<BasePlayer> team, ListDirection dir, BasePlayer spectatingTarget, out BasePlayer target)
+        private bool TryFindSpectationTarget(IEnumerable<BasePlayer> team, ListDirection dir, BasePlayer spectatingTarget, out BasePlayer target)
         {
             target = null;
-            List<BasePlayer> list = SortPlayersInTeam(team); int i;
+            List<BasePlayer> list = SortPlayers(team); int i;
             int startIndex = spectatingTarget != null ? list.IndexOf(spectatingTarget) : 0;
             if (startIndex < 0)
             {
@@ -1764,7 +1776,7 @@ namespace Oxide.Plugins
             return false;
         }
 
-        public void TrySpectate(BasePlayer player, HashSet<BasePlayer> team, ListDirection instr, BasePlayer spectatingTarget)
+        public void TrySpectate(BasePlayer player, IEnumerable<BasePlayer> team, ListDirection instr, BasePlayer spectatingTarget)
         {
             if (player == null || player.IsDestroyed) return;
             if (TryFindSpectationTarget(team, instr, spectatingTarget, out BasePlayer target))
@@ -1791,8 +1803,8 @@ namespace Oxide.Plugins
         #endregion Spectating
 
         #region Team
-        private bool OnTeamLeave(RelationshipManager.PlayerTeam playerTeam, BasePlayer basePlayer) => false;
-        private bool OnTeamCreate(BasePlayer player) => false;
+        private bool OnTeamLeave(RelationshipManager.PlayerTeam pT, BasePlayer bP) => false;
+        private bool OnTeamCreate(BasePlayer p) => false;
         private void RemovePlayerFromTeam(BasePlayer player)
         {
             List<RelationshipManager.PlayerTeam> teams = RelationshipManager.ServerInstance.teams.Values.ToList();
@@ -1801,7 +1813,8 @@ namespace Oxide.Plugins
                 var membersCopy = team.members.ToList(); // копия списка
                 foreach (ulong plrId in membersCopy)
                 {
-                    if (plrId == player.userID) team.RemovePlayer(plrId);
+                    if (plrId == player.userID)
+                        team.RemovePlayer(plrId);
                 }
             }
         }
@@ -1817,7 +1830,7 @@ namespace Oxide.Plugins
                 team.Disband();
             }
         }
-        private void CreateNewTeam(HashSet<BasePlayer> players)
+        private void CreateNewTeam(IEnumerable<BasePlayer> players)
         {
             // Создаём новую команду
             RelationshipManager.PlayerTeam newTeam = RelationshipManager.ServerInstance.CreateTeam();
@@ -1830,72 +1843,53 @@ namespace Oxide.Plugins
         #region Helpers
 
 
-        private List<MatchMember> SortPlayersInTeam(List<MatchMember> team)
-        {
-            List<MatchMember> sortedTeam = team.ToList();
-            int i; bool swapped; MatchMember member;
-            do
-            {
-                swapped = false;
-                for (i = 0; i < sortedTeam.Count - 1; ++i)
-                {
-                    if (sortedTeam[i] == null || sortedTeam[i + 1] == null)
-                    {
-                        Puts("BasePlayer in SortPlayersInTeam() == null, value skipped");
-                        continue;
-                    }
-                    if (sortedTeam[i].userID > sortedTeam[i + 1].userID)
-                    {
-                        member = sortedTeam[i];
-                        sortedTeam[i] = sortedTeam[i + 1];
-                        sortedTeam[i + 1] = member;
-                        swapped = true;
-                    }
-                }
-            } while (swapped);
-            return sortedTeam;
-        }
+        private List<MatchMember> SortMembers(IEnumerable<MatchMember> members) =>
+            members.OrderBy(m => m.userID).ToList();
 
-        private List<BasePlayer> SortPlayersInTeam(HashSet<BasePlayer> team)
-        {
-            List<BasePlayer> sortedTeam = team.ToList();
-            int i; bool swapped; BasePlayer plr;
-            do
-            {
-                swapped = false;
-                for (i = 0; i < sortedTeam.Count - 1; ++i)
-                {
-                    if (sortedTeam[i] == null || sortedTeam[i + 1] == null)
-                    {
-                        Puts("BasePlayer in SortPlayersInTeam() == null, value skipped");
-                        continue;
-                    }
-                    if (sortedTeam[i].userID > sortedTeam[i + 1].userID)
-                    {
-                        plr = sortedTeam[i];
-                        sortedTeam[i] = sortedTeam[i + 1];
-                        sortedTeam[i + 1] = plr;
-                        swapped = true;
-                    }
-                }
-            } while (swapped);
-            return sortedTeam;
-        }
+        private List<BasePlayer> SortPlayers(IEnumerable<BasePlayer> players) =>
+            players.OrderBy(m => m.userID).ToList();
 
-        private List<BasePlayer> GetPlayersListByIDStrings(List<string> idStrings)
-        {
-            List<BasePlayer> players = new List<BasePlayer>();
-            foreach (string id in idStrings)
-            {
-                BasePlayer player = BasePlayer.FindByID(ulong.Parse(id));
-                if (player != null)
-                    players.Add(player);
-                else
-                    Puts("Player Not Found during HUD Initialisation");
-            }
 
-            return players;
-        }
+        //private List<BasePlayer> SortPlayersInTeam(HashSet<BasePlayer> team)
+        //{
+        //    List<BasePlayer> sortedTeam = team.ToList();
+        //    int i; bool swapped; BasePlayer plr;
+        //    do
+        //    {
+        //        swapped = false;
+        //        for (i = 0; i < sortedTeam.Count - 1; ++i)
+        //        {
+        //            if (sortedTeam[i] == null || sortedTeam[i + 1] == null)
+        //            {
+        //                Puts("BasePlayer in SortPlayersInTeam() == null, value skipped");
+        //                continue;
+        //            }
+        //            if (sortedTeam[i].userID > sortedTeam[i + 1].userID)
+        //            {
+        //                plr = sortedTeam[i];
+        //                sortedTeam[i] = sortedTeam[i + 1];
+        //                sortedTeam[i + 1] = plr;
+        //                swapped = true;
+        //            }
+        //        }
+        //    } while (swapped);
+        //    return sortedTeam;
+        //}
+
+        //private List<BasePlayer> GetPlayersListByIDStrings(List<string> idStrings)
+        //{
+        //    List<BasePlayer> players = new List<BasePlayer>();
+        //    foreach (string id in idStrings)
+        //    {
+        //        BasePlayer player = BasePlayer.FindByID(ulong.Parse(id));
+        //        if (player != null)
+        //            players.Add(player);
+        //        else
+        //            Puts("Player Not Found during HUD Initialisation");
+        //    }
+
+        //    return players;
+        //}
 
         #endregion Helpers
 
@@ -1922,7 +1916,7 @@ namespace Oxide.Plugins
         //private void KillBomb()
         //{
         //    round.bomb?.Kill();
-        //    round.bombTimer?.DestroyToPool();
+        //    round.bombTimer?.Destroy();
         //    round.bomb = null;
         //    round.bombPlanter = null;
         //    round.isBombPlanted = false;
@@ -2020,6 +2014,7 @@ namespace Oxide.Plugins
 
             round.isBombExploded = true;
             Puts("Bomb has been detonated");
+            CallRoundEnd(ReasonRoundEnd.BombExploded);
             foreach (BasePlayer player in BasePlayer.activePlayerList.ToList())
             {
                 if (player == null || player.IsDead() || player.IsSpectating())
@@ -2041,7 +2036,6 @@ namespace Oxide.Plugins
                 round.bomb.AdminKill();
                 round.bomb = null;
             }
-            CallRoundEnd(ReasonRoundEnd.BombExploded);
         }
 
         private void DefuseBomb()
@@ -2054,14 +2048,24 @@ namespace Oxide.Plugins
         #endregion Bomb
 
         #region Plant and Defuse
-        private bool CanBombInteract(BasePlayer player) =>
-            round.isGoing && player.IsOnGround() && IsPlayerInPlant(player) && player.IsDucked() && player.CanInteract();
+        private bool CanBombInteract(BasePlayer player)
+            => round.isGoing
+            && player.IsOnGround()
+            && IsPlayerInPlant(player)
+            && player.IsDucked()
+            && player.CanInteract();
 
         private bool CanPlant(BasePlayer player)
-            => CanBombInteract(player) && IsBombInHands(player);
+            => CanBombInteract(player)
+            && IsBombInHands(player)
+            && round.GetMember(player.userID).IsRaider();
 
         private bool CanDefuse(BasePlayer player)
-            => CanBombInteract(player) && round.isBombPlanted && IsPlayerNearBomb(player) && !round.GetMember(player.userID).IsDead();
+            => CanBombInteract(player)
+            && round.isBombPlanted
+            && IsPlayerNearBomb(player)
+            && round.GetMember(player.userID).IsDefender();
+
         private bool IsBombInHands(BasePlayer player)
         {
             Item item = player.GetActiveItem();
@@ -2076,8 +2080,10 @@ namespace Oxide.Plugins
         private Timer tmrOnce;
         private object OnPlayerInput(BasePlayer player, InputState input)
         {
-            if (player == null || input == null || player.serverInput == null)
+            if (player == null || input == null || player.serverInput == null || !round.IsMember(player.userID))
                 return null;
+
+            MatchMember matchMember = round.GetMember(player.userID);
 
             if (input.WasJustPressed(BUTTON.USE))
             {
@@ -2085,7 +2091,6 @@ namespace Oxide.Plugins
                 {
                     float seconds = 0;
                     float tick = 0.2f;
-                    round.bombPlanter = player;
                     tmrEvery = timer.Every(tick, () =>
                     {
                         Planting(seconds % 6 == 0);
@@ -2093,41 +2098,50 @@ namespace Oxide.Plugins
                         seconds = Mathf.Round(seconds);
                     });
                     tmrOnce = timer.Once(pluginConfig.BombPlantTime, PlantTimeOver);
-                    Puts($"Player [{player.ToString()}] Start planting");
-                    if (round.TryGetMatchMember(player.userID, out MatchMember member))
-                        member.userInterface.CreateProgressBar(ref timer, pluginConfig.BombPlantTime);
-                    bombInteractionPos = player.transform.position;
-                }
 
-                if (CanDefuse(player) && tmrEvery == null && round.bombDefuser == null && round.isBombPlanted)
+                    round.bombPlanter = player;
+                    matchMember.userInterface.CreateProgressBar(ref timer, pluginConfig.BombPlantTime);
+                    bombInteractionPos = player.transform.position;
+                    Puts($"Player [{player.ToString()}] start planting");
+                }
+                else if (CanDefuse(player) && tmrEvery == null && round.bombDefuser == null && round.isBombPlanted)
                 {
                     float tick = 0.2f;
-                    round.bombDefuser = player;
                     tmrEvery = timer.Every(tick, Defusing);
                     tmrOnce = timer.Once(pluginConfig.BombDefuseTime, DefuseTimeOver);
-                    Puts($"[{player.ToString()}] Start defusing");
-                    if (round.TryGetMatchMember(player.userID, out MatchMember member))
-                        member.userInterface.CreateProgressBar(ref timer, pluginConfig.BombDefuseTime);
-                    Effect.server.Run(defusingSound1, round.bomb.ServerPosition);
-                    Effect.server.Run(defusingSound2, round.bomb.ServerPosition);
+
+                    Effect.server.Run(defusingSound1, round.bomb.transform.position);
+                    Effect.server.Run(defusingSound2, round.bomb.transform.position);
+
+                    round.bombDefuser = player;
+                    matchMember.userInterface.CreateProgressBar(ref timer, pluginConfig.BombDefuseTime);
                     bombInteractionPos = player.GetNetworkPosition();
+                    Puts($"Player [{player.ToString()}] start defusing");
                 }
             }
             if (input.WasJustReleased(BUTTON.USE))
             {
-                if (tmrEvery != null && round.bombPlanter != null)
-                    InteruptPlant();
-                else if (tmrEvery != null && round.bombDefuser != null)
-                    InteruptDefuse();
+                
+                if (tmrEvery != null && round.bombPlanter != null && !round.isBombPlanted)
+                {
+                    if (player.userID == round.bombPlanter.userID)
+                        InteruptPlant();
+                }  
+                else if (tmrEvery != null && round.bombDefuser != null && round.isBombPlanted)
+                {
+                    if (player.userID == round.bombDefuser.userID)
+                        InteruptDefuse();
+                }
+                    
             }
 
             return null;
         }
         private void DestroyTmr()
         {
-            tmrEvery?.DestroyToPool();
+            tmrEvery?.Destroy();
             tmrEvery = null;
-            tmrOnce?.DestroyToPool();
+            tmrOnce?.Destroy();
             tmrOnce = null;
         }
 
@@ -2148,7 +2162,7 @@ namespace Oxide.Plugins
         }
         private void Defusing()
         {
-            if (!CanDefuse(round.bombDefuser) || IsDifferentPos(round.bombPlanter.GetNetworkPosition(), bombInteractionPos))
+            if (!CanDefuse(round.bombDefuser) || IsDifferentPos(round.bombDefuser.GetNetworkPosition(), bombInteractionPos))
                 InteruptDefuse();
         }
         private void InteruptDefuse()
@@ -2171,8 +2185,8 @@ namespace Oxide.Plugins
         {
             LoadConfig();
             DestroyTmr();
-            round.timerOnce.DestroyToPool();
-            round.timerEvery.DestroyToPool();
+            round.timerOnce.Destroy();
+            round.timerEvery.Destroy();
             PlantBomb(round.bombPlanter, pluginConfig.BombLifetime);
             PlayerUtility.RemoveActiveItem(round.bombPlanter);
 
@@ -2273,18 +2287,8 @@ namespace Oxide.Plugins
 
             if (isRaider)
             {
-                
-                if (!round.IsTeamAlive(Team.Raiders)) //ЕСЛИ ВСЕ РЕЙДЕРЫ МЕРТВЫ
+                if (!round.IsTeamAlive(Team.Raiders))
                 {
-                    //HashSet<BasePlayer> plrs = raiders;
-                    //plrs.Remove(player);
-
-                    //timer.Once(pluginConfig.RoundEndDelay, () =>
-                    //{
-                    //    KillAll(plrs.ToList());
-                    //    if (connected) forceRespawn(player);
-                    //});
-
                     Puts($"All raiders is dead");
                     CallRoundEnd(ReasonRoundEnd.TeamRaidersDead);
                     return;
@@ -2295,7 +2299,7 @@ namespace Oxide.Plugins
                     {
                         if (!round.IsTeamAlive(Team.Raiders))
                             return;
-                        HashSet<BasePlayer> raiders = round.GetTeamPlayers(Team.Raiders);
+                        List<BasePlayer> raiders = round.GetTeamPlayers(Team.Raiders);
                         foreach (BasePlayer spectator in player.GetSpectators())
                             TrySpectate(spectator, raiders, ListDirection.Next, player);
 
@@ -2308,15 +2312,6 @@ namespace Oxide.Plugins
             {
                 if (!round.IsTeamAlive(Team.Defenders))
                 {
-                    //HashSet<BasePlayer> plrs = defenders;
-                    //plrs.Remove(player);
-
-                    //timer.Once(pluginConfig.RoundEndDelay, () =>
-                    //{
-                    //    KillAll(plrs.ToList());
-                    //    //if (connected) forceRespawn(player);
-                    //});
-
                     Puts($"All defenders is dead");
                     CallRoundEnd(ReasonRoundEnd.TeamDefendersDead);
                     return;
@@ -2326,7 +2321,7 @@ namespace Oxide.Plugins
                     timer.Once(pluginConfig.DeathDuration, () => {
                         if (!round.IsTeamAlive(Team.Defenders))
                             return;
-                        HashSet<BasePlayer> defenders = round.GetTeamPlayers(Team.Defenders);
+                        List<BasePlayer> defenders = round.GetTeamPlayers(Team.Defenders);
                         foreach (BasePlayer spectator in player.GetSpectators())
                             TrySpectate(spectator, defenders, ListDirection.Next, player);
 
@@ -2357,7 +2352,8 @@ namespace Oxide.Plugins
                 {
                     if (round.TryGetMatchMember(player.userID, out MatchMember member))
                     {
-                        member.userInterface.CreateInterface(SortPlayersInTeam(round.GetOnlineMembers()), pluginConfig.MaxTeamSize);
+                        List<MatchMember> onlineMembers = round.GetOnlineMembers();
+                        member.userInterface.CreateInterface(SortMembers(onlineMembers), pluginConfig.MaxTeamSize);
                         if (!round.isBombPlanted)
                             member.userInterface.SetTime(round.countdown);
                         else if (round.isBombPlanted)
@@ -2368,7 +2364,7 @@ namespace Oxide.Plugins
                         if (member.IsDead())
                             TrySpectate(player, round.GetTeamPlayers(member.team), ListDirection.Next, null);
 
-                        foreach (MatchMember m in round.members)
+                        foreach (MatchMember m in onlineMembers)
                         {
                             member.userInterface.SetPlayerScore(m);
                             if (m.droppedOut)
@@ -2402,7 +2398,8 @@ namespace Oxide.Plugins
 
         private void DropItems(BasePlayer player)
         {
-            player.UpdateActiveItem(new ItemId());
+            //player.UpdateActiveItem(new ItemId());
+            PlayerUtility.RemoveActiveItem(player);
             Item c4bomb = player.inventory.FindItemByItemName("explosive.timed");
             Item ak47 = player.inventory.FindItemByItemName("rifle.ak");
             Item syringe = player.inventory.FindItemByItemName("syringe.medical");
@@ -2447,7 +2444,7 @@ namespace Oxide.Plugins
             }
         }
 
-        //[ChatCommand("plant")]
+        //[ChatCommand("t")]
         //private void test3(BasePlayer player, string command, string[] args)
         //{
         //    LoadConfig();
