@@ -256,11 +256,7 @@ internal class UserInterface
         progressBarFrame.color = CUI.Color.ProcentRGB(1, 1, 1, 1);
         canvas.Draw();
 
-        if (progressBarCanvas != null)
-        {
-            if (progressBarCanvas.isAlive)
-                progressBarCanvas.Destroy();
-        }
+        DestroyProgressBar();
 
         timer.Once(time, () =>
         {
@@ -272,7 +268,6 @@ internal class UserInterface
         float x = 0;
         float inc = 1 / (time / tick);
         progressBarCanvas = canvas;
-        //CUI.Frame barBackground = (CUI.Frame)progressBarCanvas.children[0];
         progerssBarTimerEvery = timer.Every(tick, () =>
         {
             if (progressBarFrame == null) return;
@@ -281,7 +276,6 @@ internal class UserInterface
             x += inc;
             if (x >= 1f - Mathf.Epsilon)
             {
-                // Устанавливаем точное значение
                 progressBarFrame.size = CUI.Transform.FromScale(1f, 1f);
                 progressBarFrame.Update();
                 return;
@@ -327,7 +321,7 @@ internal class UserInterface
 
                     break;
                 }
-                else Oxide.Core.Interface.Oxide.LogInfo("Avater shadow is not found");
+                else Oxide.Core.Interface.Oxide.LogInfo("[CounterRust] Avater shadow is not found");
 
             }
         }
@@ -434,7 +428,6 @@ internal class UserInterface
         backgroundFrame.name = target.UserIDString;
         backgroundFrame.size = CUI.Transform.FromOffset(570, 90);
         backgroundFrame.parent = canvas;
-        backgroundFrame.owner = owner;
         backgroundFrame.color = CUI.Color.HEX("1B1A15", 0.95f);
 
         CUI.ImageLabel avatar = new CUI.ImageLabel();
@@ -501,6 +494,12 @@ internal class UserInterface
         }
 
         CUI.Button arrowNext = new CUI.Button();
+        //arrowNext.AddComponent(new CuiButtonComponent {
+        //    Command = "hud.spectating.next",
+        //    Sprite = "assets/icons/maparrow.png",
+        //    Color = " 1 1 1 1",
+        //    PressedColor = "1 1 1 0.75"
+        //});
         arrowNext.parent = backgroundFrame;
         arrowNext.anchor = CUI.Transform.FromScale(1, 0);
         arrowNext.position = CUI.Transform.FromScale(1, 0);
@@ -511,6 +510,7 @@ internal class UserInterface
         arrowNext.color = CUI.Color.ProcentRGB(1, 1, 1, 1);
         arrowNext.pressedColor = CUI.Color.ProcentRGB(1, 1, 1, 0.75f);
 
+
         CUI.Button arrowPrevios = new CUI.Button();
         arrowPrevios.parent = backgroundFrame;
         arrowPrevios.size = CUI.Transform.FromOffset(90, 90);
@@ -518,6 +518,13 @@ internal class UserInterface
         arrowPrevios.sprite = "assets/icons/maparrow.png";
         arrowPrevios.pressedColor = CUI.Color.ProcentRGB(1, 1, 1, 0.75f);
         arrowPrevios.color = CUI.Color.ProcentRGB(1, 1, 1, 1);
+        //arrowPrevios.AddComponent(new CuiButtonComponent
+        //{
+        //    Command = "hud.spectating.previous",
+        //    Sprite = "assets/icons/maparrow.png",
+        //    Color = " 1 1 1 1",
+        //    PressedColor = "1 1 1 0.75"
+        //});
 
         canvas.Draw();
         spectatorCanvas = canvas;
@@ -555,25 +562,6 @@ internal class UserInterface
 
     public void SetPlayerScore(MatchMember ownerScore)
     {
-        //SCORE IN SPECTATOR
-        if (spectatorCanvas.isAlive)
-        {
-            foreach (CUI.Element child in spectatorCanvas.GetDescendants())
-            {
-                if (child is CUI.TextLabel && child.name == killsTextName)
-                {
-                    CUI.TextLabel killsText = (CUI.TextLabel)child;
-                    killsText.text = "убийств: " + ownerScore.kills.ToString();
-                    killsText.Update();
-                }
-                if (child is CUI.TextLabel && child.name == deathTextName)
-                {
-                    CUI.TextLabel deathsText = (CUI.TextLabel)child;
-                    deathsText.text = "смертей: " + ownerScore.deaths.ToString();
-                    deathsText.Update();
-                }
-            }
-        }
         //SCORE IN TAB
         foreach (CUI.Element e in roundTabCanvas.GetDescendants().ToList())
         {
@@ -595,6 +583,29 @@ internal class UserInterface
                         deathsText.text = ownerScore.deaths.ToString();
                         deathsText.Update();
                     }
+                }
+            }
+        }
+    }
+
+    public void UpdateSpectatorPlayerScore(MatchMember ownerScore)
+    {
+        //SCORE IN SPECTATOR
+        if (spectatorCanvas.isAlive)
+        {
+            foreach (CUI.Element child in spectatorCanvas.GetDescendants())
+            {
+                if (child is CUI.TextLabel && child.name == killsTextName)
+                {
+                    CUI.TextLabel killsText = (CUI.TextLabel)child;
+                    killsText.text = "убийств: " + ownerScore.kills.ToString();
+                    killsText.Update();
+                }
+                if (child is CUI.TextLabel && child.name == deathTextName)
+                {
+                    CUI.TextLabel deathsText = (CUI.TextLabel)child;
+                    deathsText.text = "смертей: " + ownerScore.deaths.ToString();
+                    deathsText.Update();
                 }
             }
         }
@@ -690,31 +701,24 @@ internal class UserInterface
 
     public void DestroyInterface()
     {
-        DestroySpectatorInterface();
+        DestroySpectatorMenu();
         roundTabCanvas.Destroy();
-        roundTabCanvas = null;
-        progressBarCanvas?.Destroy();
-        progressBarCanvas = null;
+        DestroyProgressBar();
         DestroyRoundResult();
     }
 
     public void DestroyRoundResult()
     {
-        if (roundResultCanvas != null)
-        {
-            if (roundResultCanvas.isAlive)
-                roundResultCanvas.Destroy();
-            roundResultCanvas = null;
-        }
+        if (roundResultCanvas.isAlive)
+            roundResultCanvas.Destroy();
     }
 
     public void DestroyProgressBar()
     {
-        Oxide.Core.Interface.Oxide.LogInfo("[onevsfive] Progress bar is destroyed");
-        if (progressBarCanvas != null)
+        if (progressBarCanvas.isAlive)
         {
+            Oxide.Core.Interface.Oxide.LogInfo("[CounterRust] Progress bar is destroyed");
             progressBarCanvas.Destroy();
-            progressBarCanvas = null;
         }
         progerssBarTimerEvery?.Destroy();
         progerssBarTimerEvery = null;
@@ -722,15 +726,13 @@ internal class UserInterface
         progerssBarTimerOnce = null;
     }
 
-    public void DestroySpectatorInterface()
+    public void DestroySpectatorMenu()
     {
-        if (spectatorCanvas != null)
-        {
-            if (spectatorCanvas.isAlive)
-                spectatorCanvas.Destroy();
-            spectatorCanvas = null;
-        }
+        if (spectatorCanvas.isAlive)
+            spectatorCanvas.Destroy();
     }
+
+
 }
 
 internal class MatchMember
@@ -1162,6 +1164,7 @@ namespace Oxide.Plugins
             return pluginConfig;
         }
         #endregion
+
 
         private void Init()
         {
@@ -1671,6 +1674,7 @@ namespace Oxide.Plugins
 
         private object CanLootPlayer(BasePlayer target, BasePlayer initiator)
         {
+            PrintToChat("123");
             if (match.isGoing) return false;
             else return null;
         }
@@ -1716,11 +1720,12 @@ namespace Oxide.Plugins
         private bool TryFindSpectationTarget(IEnumerable<BasePlayer> team, ListDirection dir, BasePlayer spectatingTarget, out BasePlayer target)
         {
             target = null;
-            List<BasePlayer> list = SortPlayers(team); int i;
+            List<BasePlayer> list = SortPlayers(team.ToList());
+            int i;
             int startIndex = spectatingTarget != null ? list.IndexOf(spectatingTarget) : 0;
             if (startIndex < 0)
             {
-                Puts("[ovevsfive] Start index in TryFindSpectating target is out array");
+                Puts("Start index in TryFindSpectating target is out array");
                 return false;
             }
 
@@ -1763,7 +1768,7 @@ namespace Oxide.Plugins
                 if (round.TryGetMatchMember(player.userID, out MatchMember member))
                 {
                     if (member.userInterface.spectatorCanvas.isAlive)
-                        member.userInterface.DestroySpectatorInterface();
+                        member.userInterface.DestroySpectatorMenu();
                     member.userInterface.CreateSpectatorInterface(target);
                 }
             }
@@ -1772,7 +1777,7 @@ namespace Oxide.Plugins
                 if (round.TryGetMatchMember(player.userID, out MatchMember member))
                 {
                     if (member.userInterface.spectatorCanvas.isAlive)
-                        member.userInterface.DestroySpectatorInterface();
+                        member.userInterface.DestroySpectatorMenu();
                 }
                 NextTick(() => { ForceRespawn(player); });
             }
@@ -1830,8 +1835,13 @@ namespace Oxide.Plugins
         private List<MatchMember> SortMembers(IEnumerable<MatchMember> members) =>
             members.OrderBy(m => m.userID).ToList();
 
-        private List<BasePlayer> SortPlayers(IEnumerable<BasePlayer> players) =>
-            players.OrderBy(m => m.userID).ToList();
+        private List<BasePlayer> SortPlayers(IEnumerable<BasePlayer> players)
+        {
+            List<BasePlayer> list = new List<BasePlayer>(players);
+            list.Sort((a, b) => ((ulong)a.userID).CompareTo((ulong)b.userID));
+            return list;
+        }
+
 
 
         #endregion Helpers
@@ -2196,23 +2206,33 @@ namespace Oxide.Plugins
             matchMember.deaths++;
             foreach (MatchMember member in round.GetOnlineMembers())
             {
+                BasePlayer p = member.GetPlayer();
                 member.userInterface.SetPlayerScore(matchMember);
                 member.userInterface.MakeAvatarDeath(player);
+                if (p.SpectatingTarget != null)
+                {
+                    if (p.SpectatingTarget.userID == matchMember.userID)
+                        member.userInterface.UpdateSpectatorPlayerScore(matchMember);
+                }
+                    
             }
-            matchMember.userInterface.DestroySpectatorInterface();
+            //matchMember.userInterface.DestroySpectatorMenu();
 
             RemovePlayerFromTeam(player);
 
             BaseEntity entInitiator = info.Initiator;
             BasePlayer killer = entInitiator?.ToPlayer();
-            if (killer != null && !player.Equals(killer))
+            if (killer != null)
             {
-                Puts($"Player {player.ToString()} was killed by {killer.ToString()}");
-                if (match.TryGetMatchMember(killer.userID, out MatchMember killerMember))
+                if (killer.userID != player.userID)
                 {
-                    killerMember.kills++;
-                    foreach (MatchMember member in round.GetOnlineMembers())
-                        member.userInterface.SetPlayerScore(killerMember);
+                    Puts($"Player {player.ToString()} was killed by {killer.ToString()}");
+                    if (match.TryGetMatchMember(killer.userID, out MatchMember killerMember))
+                    {
+                        killerMember.kills++;
+                        foreach (MatchMember member in round.GetOnlineMembers())
+                            member.userInterface.SetPlayerScore(killerMember);
+                    }
                 }
             }
 
@@ -2372,12 +2392,26 @@ namespace Oxide.Plugins
             }
         }
 
-        //[ChatCommand("t")]
+        //[ConsoleCommand("t")]
         //private void test3(BasePlayer player, string command, string[] args)
         //{
         //    LoadConfig();
         //    PlantBomb(player, pluginConfig.BombLifetime);
         //}
+
+        [ConsoleCommand("test")]
+        private void cmdTest(ConsoleSystem.Arg arg)
+        {
+            if (arg.HasArgs(1))
+            {
+                string userID = arg.Args[0].ToString();
+                BasePlayer player = BasePlayer.Find(userID);
+                if (player != null)
+                    Puts("{0}, {1}", player, PlayerUtility.IsOnline(player));
+                else
+                    Puts("Can't found player with id [{0}]", userID);
+            }
+        }
 
         [ChatCommand("cl")]
         private void ClearMapCommand(BasePlayer player, string command, string[] args)
