@@ -1674,9 +1674,10 @@ namespace Oxide.Plugins
 
         private object CanLootPlayer(BasePlayer target, BasePlayer initiator)
         {
-            PrintToChat("123");
-            if (match.isGoing) return false;
-            else return null;
+            if (round.IsMember(initiator.userID))
+                return false;
+
+            return true;
         }
 
         private object OnItemPickup(Item item, BasePlayer player, WorldItem instance)
